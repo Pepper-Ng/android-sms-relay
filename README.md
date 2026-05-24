@@ -7,7 +7,6 @@ The broader goal of these projects is to automate access to a personal Nedap ONS
 ## Companion backend
 
 - GitHub repository: <https://github.com/Pepper-Ng/ons-rooster-backend>
-- Local sibling checkout reference: `C:/Users/Stef/Documents/Projects/onsrooster/ons-backend/README.md`
 
 The backend is responsible for:
 
