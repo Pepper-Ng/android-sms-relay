@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ONS SMS Relay</string>
+    <string name="status_connecting">Connecting to server…</string>
+    <string name="status_connected_waiting">Connected — waiting for trigger</string>
+    <string name="status_disconnected_reconnecting">Connection lost — reconnecting…</string>
+    <string name="status_waiting_sms">Waiting for SMS from Nedap ONS…</string>
+    <string name="status_sms_received">SMS received, processing…</string>
+    <string name="status_processed">Code successfully processed</string>
+    <string name="status_error_timeout">No SMS received (timeout)</string>
+    <string name="status_error_failed">Code could not be processed</string>
+
+    <string name="notif_channel_name">Relay Status</string>
+    <string name="notif_channel_desc">Shows the connection status with the backend server.</string>
+    <string name="notif_title">ONS SMS Relay</string>
+
+    <string name="ui_sms_permission_granted">✓ SMS permission granted</string>
+    <string name="ui_sms_permission_missing">✗ SMS permission missing</string>
+    <string name="ui_all_permissions_granted">✓ Permissions granted</string>
+    <string name="ui_permissions_missing">✗ SMS and Notification permissions missing</string>
+    <string name="ui_notif_permission_missing">✗ Notification permission missing</string>
+
+    <string name="ui_btn_request_permissions">Grant Permissions</string>
+    <string name="ui_btn_battery_optimization">Disable battery optimization</string>
+    <string name="ui_btn_copy_token">Copy token</string>
+
+    <string name="ui_token_label">FCM Token (copy to server)</string>
+    <string name="ui_token_loading">Loading…</string>
+    <string name="ui_token_copied">Token copied to clipboard</string>
+    <string name="ui_battery_not_needed">Not needed on this Android version</string>
+
+    <string name="ui_instructions">
+        1. Grant SMS permission\n
+        2. Disable battery optimization\n
+        3. Copy the FCM token\n
+        4. Provide the token to your server configuration\n\n
+        After this, you do not need to keep the app open.\n
+        FCM automatically wakes the app on a push,\n
+        even after a reboot.
+    </string>
+
+    <string name="toast_permission_granted">SMS permission granted ✓</string>
+    <string name="toast_permission_denied">SMS permission is required</string>
+</resources>
