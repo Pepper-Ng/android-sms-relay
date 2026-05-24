@@ -6,18 +6,20 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Telephony
 import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import kotlinx.coroutines.*
 import nl.landvanhorne.smsrelay.R
+import nl.landvanhorne.smsrelay.data.AppSettingsStore
+import nl.landvanhorne.smsrelay.data.BackendApi
+import nl.landvanhorne.smsrelay.util.SmsCodeExtractor
 import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
@@ -34,104 +36,117 @@ class OnsFirebaseService : FirebaseMessagingService() {
 
     companion object {
         const val TAG = "OnsFirebaseService"
-        // Wait for a maximum of 2 minutes for the SMS.
-        const val SMS_TIMEOUT_MS = 120_000L
-
-        // Set the server address here (HTTP, not WebSocket).
-        const val SERVER_CALLBACK_URL = "http://backend-server.local:8080/sms_code"
+        const val DEFAULT_SMS_TIMEOUT_MS = 120_000L
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val http = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .writeTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .build()
+    private val backendApi = BackendApi()
+    private val settingsStore by lazy { AppSettingsStore(this) }
 
-    // Temporary SMS receiver, only active during listening mode.
     private var smsReceiver: BroadcastReceiver? = null
-
-    // ── FCM messages ────────────────────────────────────────────────────────
+    private var activeChallengeId: String? = null
 
     override fun onMessageReceived(message: RemoteMessage) {
         val type = message.data["type"] ?: message.notification?.title
         Log.d(TAG, "FCM received: type=$type")
 
         when (type) {
-            "listen_sms" -> {
-                showStatusNotification(getString(R.string.status_waiting_sms))
-                startSmsListening()
-            }
+            "listen_sms" -> handleListenSms(message.data)
+            "auth_result" -> handleAuthResult(message.data)
             else -> Log.w(TAG, "Unknown FCM type: $type")
         }
     }
 
-    /**
-     * Called when FCM generates a new device token.
-     * The server needs this token to send push messages.
-     * It is automatically forwarded to the server.
-     */
     override fun onNewToken(token: String) {
         Log.d(TAG, "New FCM token: $token")
-        // Save to SharedPreferences so MainActivity can display it.
-        getSharedPreferences("relay", MODE_PRIVATE)
-            .edit()
-            .putString("fcm_token", token)
-            .apply()
+        settingsStore.saveFcmToken(token)
 
-        // Forward to server if it is reachable.
+        // The FCM token is forwarded opportunistically when the app already has a backend token.
         scope.launch {
             try {
-                val body = JSONObject().apply {
-                    put("type", "register_token")
-                    put("token", token)
-                }.toString().toRequestBody("application/json".toMediaType())
-
-                val registerUrl = SERVER_CALLBACK_URL.replace("/sms_code", "/register_token")
-                http.newCall(
-                    Request.Builder().url(registerUrl)
-                        .post(body).build()
-                ).execute().close()
+                val settings = settingsStore.load()
+                if (settings.backendBaseUrl.isBlank() || settings.apiToken.isBlank()) {
+                    return@launch
+                }
+                backendApi.updateFcmToken(
+                    backendBaseUrl = settings.backendBaseUrl,
+                    apiToken = settings.apiToken,
+                    fcmToken = token,
+                    deviceLabel = settings.deviceLabel,
+                )
             } catch (e: Exception) {
-                Log.w(TAG, "Token forwarding failed (server might be unreachable): ${e.message}")
+                Log.w(TAG, "Token forwarding failed: ${e.message}")
             }
         }
     }
 
-    // ── SMS Listening ────────────────────────────────────────────────────────
+    private fun handleListenSms(data: Map<String, String>) {
+        val challengeId = data["challenge_id"].orEmpty()
+        val timeoutMs = data["expires_in_seconds"]?.toLongOrNull()?.times(1_000)
+            ?: DEFAULT_SMS_TIMEOUT_MS
+        if (challengeId.isBlank()) {
+            Log.w(TAG, "Missing challenge identifier in listen_sms push")
+            return
+        }
+        if (!hasSmsPermission()) {
+            showStatusNotification(getString(R.string.status_missing_permission))
+            return
+        }
+        showStatusNotification(getString(R.string.status_waiting_sms))
+        startSmsListening(challengeId, timeoutMs)
+    }
 
-    private fun startSmsListening() {
-        // Prevent multiple registrations.
+    private fun handleAuthResult(data: Map<String, String>) {
+        val message = data["message"].orEmpty().ifBlank {
+            if (data["status"] == "success") {
+                getString(R.string.status_backend_ready)
+            } else {
+                getString(R.string.status_backend_failed)
+            }
+        }
+        settingsStore.saveLastMessage(message, if (data["status"] == "failure") message else "")
+        showStatusNotification(message)
+    }
+
+    private fun startSmsListening(challengeId: String, timeoutMs: Long) {
+        // Only one SMS listener may be active at a time because the backend drives a single challenge.
         stopSmsListening()
+        activeChallengeId = challengeId
 
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
                     ?: return
                 val sender = messages[0].displayOriginatingAddress
-                val body   = messages.joinToString("") { it.messageBody }
+                val body = messages.joinToString("") { it.messageBody }
 
                 Log.d(TAG, "SMS from $sender: $body")
-                val code = extractCode(body) ?: body.trim()
+                val code = SmsCodeExtractor.extract(body) ?: body.trim()
 
-                // Stop listening immediately once the SMS is received.
                 stopSmsListening()
                 showStatusNotification(getString(R.string.status_sms_received))
-                sendCodeToServer(sender, code)
+                sendCodeToServer(challengeId, sender, code)
             }
         }
 
         val filter = IntentFilter(Telephony.Sms.Intents.SMS_RECEIVED_ACTION).apply {
             priority = IntentFilter.SYSTEM_HIGH_PRIORITY
         }
-        registerReceiver(receiver, filter)
+
+        // Android 13 and newer require the exported state to be declared for dynamic receivers.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(receiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(receiver, filter)
+        }
         smsReceiver = receiver
 
-        Log.d(TAG, "SMS listener active for ${SMS_TIMEOUT_MS / 1000}s")
+        Log.d(TAG, "SMS listener active for ${timeoutMs / 1000}s")
 
-        // Automatic timeout if no SMS is received.
+        // The temporary listener is removed again after the challenge timeout.
         scope.launch {
-            delay(SMS_TIMEOUT_MS)
+            delay(timeoutMs)
             if (smsReceiver != null) {
                 Log.w(TAG, "Timeout: no SMS received")
                 stopSmsListening()
@@ -144,13 +159,12 @@ class OnsFirebaseService : FirebaseMessagingService() {
         smsReceiver?.let {
             try { unregisterReceiver(it) } catch (_: Exception) {}
             smsReceiver = null
+            activeChallengeId = null
             Log.d(TAG, "SMS listener stopped")
         }
     }
 
-    // ── Send code to server ─────────────────────────────────────────────────
-
-    private fun sendCodeToServer(sender: String, code: String) {
+    private fun sendCodeToServer(challengeId: String, sender: String, code: String) {
         scope.launch {
             val maxRetries = 5
             var attempt = 0
@@ -159,25 +173,21 @@ class OnsFirebaseService : FirebaseMessagingService() {
             while (attempt < maxRetries) {
                 attempt++
                 try {
-                    val body = JSONObject().apply {
-                        put("type", "sms_code")
-                        put("sender", sender)
-                        put("code", code)
-                    }.toString().toRequestBody("application/json".toMediaType())
-
-                    val response = http.newCall(
-                        Request.Builder().url(SERVER_CALLBACK_URL).post(body).build()
-                    ).execute()
-
-                    if (response.isSuccessful) {
-                        Log.d(TAG, "Code successfully forwarded (attempt $attempt)")
-                        showStatusNotification(getString(R.string.status_processed))
-                        response.close()
-                        return@launch
-                    } else {
-                        Log.w(TAG, "Server responded with ${response.code}, retrying...")
-                        response.close()
+                    val settings = settingsStore.load()
+                    if (settings.backendBaseUrl.isBlank() || settings.apiToken.isBlank()) {
+                        throw IllegalStateException(getString(R.string.status_missing_setup))
                     }
+                    backendApi.submitSmsCode(
+                        backendBaseUrl = settings.backendBaseUrl,
+                        apiToken = settings.apiToken,
+                        challengeId = challengeId,
+                        sender = sender,
+                        code = code,
+                    )
+                    Log.d(TAG, "Code successfully forwarded (attempt $attempt)")
+                    showStatusNotification(getString(R.string.status_processed))
+                    settingsStore.saveLastMessage(getString(R.string.status_processed))
+                    return@launch
                 } catch (e: Exception) {
                     Log.w(TAG, "Attempt $attempt failed: ${e.message}")
                 }
@@ -194,8 +204,6 @@ class OnsFirebaseService : FirebaseMessagingService() {
             showStatusNotification(getString(R.string.status_error_failed))
         }
     }
-
-    // ── Notification ──────────────────────────────────────────────────────────
 
     private fun showStatusNotification(text: String) {
         val channelId = "ons_relay_status"
@@ -218,10 +226,10 @@ class OnsFirebaseService : FirebaseMessagingService() {
         manager.notify(42, notif)
     }
 
-    // ── Helper functions ─────────────────────────────────────────────────────
-
-    private fun extractCode(body: String): String? =
-        Regex("\\b(\\d{4,8})\\b").find(body)?.groupValues?.get(1)
+    private fun hasSmsPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECEIVE_SMS) ==
+            PackageManager.PERMISSION_GRANTED
+    }
 
     override fun onDestroy() {
         super.onDestroy()

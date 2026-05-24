@@ -1,44 +1,74 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ONS SMS Relay</string>
-    <string name="status_connecting">Connecting to server…</string>
-    <string name="status_connected_waiting">Connected — waiting for trigger</string>
-    <string name="status_disconnected_reconnecting">Connection lost — reconnecting…</string>
-    <string name="status_waiting_sms">Waiting for SMS from Nedap ONS…</string>
-    <string name="status_sms_received">SMS received, processing…</string>
-    <string name="status_processed">Code successfully processed</string>
-    <string name="status_error_timeout">No SMS received (timeout)</string>
-    <string name="status_error_failed">Code could not be processed</string>
+    <string name="app_name">ONS Rooster Koppeling</string>
+    <string name="notif_channel_name">ONS-koppelstatus</string>
+    <string name="notif_channel_desc">Toont meldingen over sms-codes en backendstatus.</string>
+    <string name="notif_title">ONS Rooster Koppeling</string>
 
-    <string name="notif_channel_name">Relay Status</string>
-    <string name="notif_channel_desc">Shows the connection status with the backend server.</string>
-    <string name="notif_title">ONS SMS Relay</string>
+    <string name="status_waiting_sms">Wachten op de ONS-sms…</string>
+    <string name="status_sms_received">Sms ontvangen. De code wordt doorgestuurd…</string>
+    <string name="status_processed">De sms-code is doorgestuurd naar de backend.</string>
+    <string name="status_error_timeout">Er kwam geen sms binnen binnen de wachttijd.</string>
+    <string name="status_error_failed">De sms-code kon niet naar de backend worden gestuurd.</string>
+    <string name="status_missing_setup">Deze telefoon is nog niet gekoppeld aan de backend.</string>
+    <string name="status_backend_ready">De backend is aangemeld en klaar voor synchronisatie.</string>
+    <string name="status_backend_failed">De backend kon de aanmelding niet afronden.</string>
+    <string name="status_missing_permission">Sms-toestemming ontbreekt. De code kan nog niet automatisch worden gelezen.</string>
 
-    <string name="ui_sms_permission_granted">✓ SMS permission granted</string>
-    <string name="ui_sms_permission_missing">✗ SMS permission missing</string>
-    <string name="ui_all_permissions_granted">✓ Permissions granted</string>
-    <string name="ui_permissions_missing">✗ SMS and Notification permissions missing</string>
-    <string name="ui_notif_permission_missing">✗ Notification permission missing</string>
+    <string name="ui_title">Koppel deze telefoon aan de ONS-backend</string>
+    <string name="ui_subtitle">De telefoon levert alleen de sms-code. De backend doet de aanmelding en de synchronisatie.</string>
+    <string name="ui_permissions_title">Toestemmingen</string>
+    <string name="ui_backend_title">Backendinstellingen</string>
+    <string name="ui_status_title">Backendstatus</string>
+    <string name="ui_saved_title">Opgeslagen configuratie</string>
+    <string name="ui_token_title">FCM-token</string>
+    <string name="ui_instructions_title">Werkwijze</string>
 
-    <string name="ui_btn_request_permissions">Grant Permissions</string>
-    <string name="ui_btn_battery_optimization">Disable battery optimization</string>
-    <string name="ui_btn_copy_token">Copy token</string>
+    <string name="ui_sms_permission_granted">Sms-toestemming is verleend.</string>
+    <string name="ui_sms_permission_missing">Sms-toestemming ontbreekt.</string>
+    <string name="ui_all_permissions_granted">Alle vereiste toestemmingen zijn verleend.</string>
+    <string name="ui_permissions_missing">Sms- en meldingsmachtigingen ontbreken nog.</string>
+    <string name="ui_notif_permission_missing">Meldingstoestemming ontbreekt.</string>
 
-    <string name="ui_token_label">FCM Token (copy to server)</string>
-    <string name="ui_token_loading">Loading…</string>
-    <string name="ui_token_copied">Token copied to clipboard</string>
-    <string name="ui_battery_not_needed">Not needed on this Android version</string>
+    <string name="ui_btn_request_permissions">Toestemmingen verlenen</string>
+    <string name="ui_btn_battery_optimization">Batterijoptimalisatie uitschakelen</string>
+    <string name="ui_btn_copy_token">FCM-token kopiëren</string>
+    <string name="ui_btn_save_setup">Opslaan en koppelen</string>
+    <string name="ui_btn_refresh_status">Backendstatus verversen</string>
 
-    <string name="ui_instructions">
-        1. Grant SMS permission\n
-        2. Disable battery optimization\n
-        3. Copy the FCM token\n
-        4. Provide the token to your server configuration\n\n
-        After this, you do not need to keep the app open.\n
-        FCM automatically wakes the app on a push,\n
-        even after a reboot.
-    </string>
+    <string name="ui_backend_url_label">Backendbasis-URL</string>
+    <string name="ui_login_url_label">ONS-inlog-URL</string>
+    <string name="ui_username_label">Gebruikersnaam</string>
+    <string name="ui_password_label">Wachtwoord</string>
+    <string name="ui_setup_secret_label">Installatiecode (optioneel)</string>
+    <string name="ui_device_label_label">Apparaatnaam</string>
 
-    <string name="toast_permission_granted">SMS permission granted ✓</string>
-    <string name="toast_permission_denied">SMS permission is required</string>
+    <string name="ui_token_loading">FCM-token wordt opgehaald…</string>
+    <string name="ui_token_copied">Het FCM-token staat op het klembord.</string>
+    <string name="ui_battery_not_needed">Dit is op deze Android-versie niet nodig.</string>
+
+    <string name="ui_instructions">1. Verleen de sms- en meldingstoestemmingen.\n2. Vul de backend-URL, ONS-inlog-URL en je ONS-gebruikersnaam in.\n3. Vul je wachtwoord in en sla de koppeling op.\n4. Laat de app geïnstalleerd zodat de backend bij een 2FA-verzoek de sms-code kan ophalen.</string>
+
+    <string name="toast_permission_granted">De vereiste toestemmingen zijn verleend.</string>
+    <string name="toast_permission_denied">De app heeft de sms-toestemming nodig om codes automatisch te lezen.</string>
+    <string name="toast_setup_saved">De koppeling is opgeslagen.</string>
+    <string name="toast_setup_failed">De koppeling kon niet worden opgeslagen.</string>
+    <string name="toast_status_refresh_failed">De backendstatus kon niet worden opgehaald.</string>
+    <string name="toast_missing_form_fields">Vul alle verplichte velden in.</string>
+
+    <string name="ui_saved_configuration_value">Backend: %1$s\nInlogpagina: %2$s\nGebruikersnaam: %3$s\nApp-token opgeslagen: %4$s</string>
+    <string name="ui_backend_status_value">Status: %1$s\nFase: %2$s\nLaatste melding: %3$s\nLaatste fout: %4$s\nLaatste succesvolle login: %5$s\nFCM geconfigureerd op backend: %6$s</string>
+
+    <string name="ui_yes">Ja</string>
+    <string name="ui_no">Nee</string>
+    <string name="ui_status_idle">Inactief</string>
+    <string name="ui_status_running">Bezig</string>
+    <string name="ui_status_success">Geslaagd</string>
+    <string name="ui_status_error">Mislukt</string>
+    <string name="ui_phase_idle">Inactief</string>
+    <string name="ui_phase_starting">Starten</string>
+    <string name="ui_phase_waiting_for_sms">Wachten op sms</string>
+    <string name="ui_phase_sms_received">Sms ontvangen</string>
+    <string name="ui_phase_ready">Gereed</string>
+    <string name="ui_phase_error">Fout</string>
 </resources>
