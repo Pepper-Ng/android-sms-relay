@@ -14,6 +14,16 @@
     <string name="status_backend_ready">De backend is aangemeld en klaar voor synchronisatie.</string>
     <string name="status_backend_failed">De backend kon de aanmelding niet afronden.</string>
     <string name="status_missing_permission">Sms-toestemming ontbreekt. De code kan nog niet automatisch worden gelezen.</string>
+    <string name="status_waiting_setup">Wacht op koppeling</string>
+    <string name="status_badge_coupled">Gekoppeld</string>
+    <string name="status_badge_waiting_sms">Wacht op sms</string>
+    <string name="status_badge_last_login_failed">Laatste login mislukt</string>
+    <string name="status_badge_connected">Verbonden</string>
+    <string name="status_badge_disconnected">Niet verbonden</string>
+    <string name="status_badge_paired">Gekoppeld</string>
+    <string name="status_badge_not_paired">Niet gekoppeld</string>
+    <string name="status_badge_combined">%1$s • %2$s</string>
+    <string name="status_badge_subtext_waiting">Kies een portaal en koppel dit apparaat.</string>
 
     <string name="menu_login">Inloggen</string>
     <string name="menu_status">Status</string>
@@ -23,7 +33,7 @@
 
     <string name="ui_title">Inloggen op ONS</string>
     <string name="ui_subtitle">Deze telefoon leest alleen de sms-code. De backend doet de aanmelding en de synchronisatie.</string>
-    <string name="ui_login_helper">Backend-URL, installatiecode en apparaatnaam staan onder Instellingen.</string>
+    <string name="ui_login_helper">Kies eerst het juiste ONS-portaal. Backend-URL, installatiecode en apparaatnaam staan onder Instellingen.</string>
     <string name="ui_login_state_logged_in">Je bent al ingelogd</string>
     <string name="ui_login_state_logged_in_body">De backend bewaart je inloggegevens al. Een nieuwe login is normaal niet nodig. Laatste succesvolle login: %1$s.</string>
     <string name="ui_login_state_paired">Deze telefoon is al gekoppeld</string>
@@ -31,12 +41,12 @@
     <string name="ui_permissions_title">Toestemmingen</string>
     <string name="ui_permissions_intro">Voor automatische 2FA heeft de app sms- en meldingsrechten nodig. Zonder die rechten kan de backend geen code ophalen.</string>
     <string name="ui_status_title">Backendstatus</string>
-    <string name="ui_status_intro">Hier zie je wat de backend op dit moment doet en of de laatste login gelukt is.</string>
+    <string name="ui_status_intro">Hier zie je live wat de backend doet zolang deze statuspagina open staat. De knop blijft als fallback beschikbaar.</string>
     <string name="ui_saved_title">Opgeslagen configuratie</string>
     <string name="ui_token_title">FCM-token</string>
     <string name="ui_settings_intro">Deze geavanceerde instellingen hoef je normaal maar één keer in te vullen. De backend-URL staat standaard al goed.</string>
     <string name="ui_instructions_title">Over deze app</string>
-    <string name="ui_about_body">Versie %1$s\n\nDeze app logt niet zelf in op ONS. Hij bewaart alleen de koppeling met jouw backend en leest sms-codes uit wanneer de backend daarom vraagt.\n\nPraktische flow:\n1. Verleen sms- en meldingstoestemmingen.\n2. Vul op Inloggen je gebruikersnaam, wachtwoord en ONS-inlog-URL in.\n3. Pas alleen via Instellingen de backend-URL, installatiecode of apparaatnaam aan als dat nodig is.\n4. Laat de app geïnstalleerd zodat de backend bij een 2FA-verzoek de sms-code kan ophalen.</string>
+    <string name="ui_about_body">Versie %1$s\n\nDeze app logt niet zelf in op ONS. Hij bewaart alleen de koppeling met jouw backend en leest sms-codes uit wanneer de backend daarom vraagt.\n\nPraktische flow:\n1. Verleen sms- en meldingstoestemmingen.\n2. Kies op Inloggen het juiste ONS-portaal en vul je gebruikersnaam en wachtwoord in.\n3. Pas alleen via Instellingen de backend-URL, installatiecode of apparaatnaam aan als dat nodig is.\n4. Laat de app geïnstalleerd zodat de backend bij een 2FA-verzoek de sms-code kan ophalen.</string>
     <string name="ui_permissions_needed_before_login">Je kunt pas koppelen nadat deze app sms- en meldingstoestemmingen heeft. Verleen ze hieronder en ga daarna terug naar Inloggen.</string>
 
     <string name="ui_sms_permission_granted">Sms-toestemming is verleend.</string>
@@ -53,9 +63,13 @@
     <string name="ui_btn_relogin">Login opnieuw uitvoeren</string>
     <string name="ui_btn_save_settings">Instellingen opslaan</string>
     <string name="ui_btn_refresh_status">Backendstatus verversen</string>
+    <string name="ui_btn_unpair_device">Ontkoppel dit apparaat</string>
 
     <string name="ui_backend_url_label">Backend-URL</string>
     <string name="ui_backend_url_help">Laat dit op de standaardwaarde staan tenzij je bewust naar een andere backend wilt testen.</string>
+    <string name="ui_portal_label">ONS-portaal</string>
+    <string name="ui_portal_help">De backend beheert de echte login-URL. Jij kiest hier alleen de naam en het logo van het portaal.</string>
+    <string name="ui_portal_logo_content_description">Logo van het gekozen portaal</string>
     <string name="ui_login_url_label">ONS-inlog-URL</string>
     <string name="ui_username_label">Gebruikersnaam</string>
     <string name="ui_password_label">Wachtwoord</string>
@@ -75,10 +89,22 @@
     <string name="toast_settings_saved">De instellingen zijn opgeslagen.</string>
     <string name="toast_status_refresh_failed">De backendstatus kon niet worden opgehaald.</string>
     <string name="toast_status_requires_login">Koppel eerst via de inlogpagina voordat je de backendstatus ververst.</string>
-    <string name="toast_missing_form_fields">Vul gebruikersnaam, wachtwoord en ONS-inlog-URL in.</string>
+    <string name="toast_missing_form_fields">Kies een portaal en vul gebruikersnaam en wachtwoord in.</string>
+    <string name="toast_portal_config_failed">De lijst met ONS-portalen kon niet worden opgehaald.</string>
+    <string name="toast_unpair_failed">Het ontkoppelen van dit apparaat is mislukt.</string>
+    <string name="toast_unpair_success">Dit apparaat is ontkoppeld.</string>
 
-    <string name="ui_saved_configuration_value">Backend: %1$s\nInlogpagina: %2$s\nGebruikersnaam: %3$s\nApp-token opgeslagen: %4$s</string>
+    <string name="ui_saved_configuration_value">Backend: %1$s\nPortaal: %2$s\nGebruikersnaam: %3$s\nApp-token opgeslagen: %4$s</string>
     <string name="ui_backend_status_value">Status: %1$s\nFase: %2$s\nLaatste melding: %3$s\nLaatste fout: %4$s\nLaatste succesvolle login: %5$s\nFCM geconfigureerd op backend: %6$s</string>
+    <string name="ui_realtime_status_value">Realtime verbinding: %1$s\nApparaatstatus: %2$s</string>
+    <string name="ui_realtime_connected">Verbonden</string>
+    <string name="ui_realtime_connecting">Verbinden…</string>
+    <string name="ui_realtime_disconnected">Niet verbonden</string>
+    <string name="ui_backend_liveness_value">Backend status: %1$s</string>
+    <string name="ui_backend_available">Beschikbaar</string>
+    <string name="ui_backend_unavailable">Onbereikbaar</string>
+    <string name="ui_backend_checking">Beschikbaarheid wordt gecontroleerd…</string>
+    <string name="ui_unknown_portal">Onbekend portaal</string>
 
     <string name="ui_yes">Ja</string>
     <string name="ui_no">Nee</string>

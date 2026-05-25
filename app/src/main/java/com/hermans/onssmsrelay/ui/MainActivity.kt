@@ -1,28 +1,47 @@
 package com.hermans.onssmsrelay.ui
 
 import android.Manifest
-import android.content.*
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.MenuItem
+import android.view.View
+import android.widget.ArrayAdapter
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
 import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import coil.load
 import com.google.firebase.messaging.FirebaseMessaging
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import com.hermans.onssmsrelay.R
 import com.hermans.onssmsrelay.data.AppSettings
 import com.hermans.onssmsrelay.data.AppSettingsStore
 import com.hermans.onssmsrelay.data.BackendApi
+import com.hermans.onssmsrelay.data.BackendStatus
+import com.hermans.onssmsrelay.data.MobileConfig
+import com.hermans.onssmsrelay.data.PortalOption
 import com.hermans.onssmsrelay.databinding.ActivityMainBinding
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import okhttp3.WebSocket
+import java.text.DateFormat
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -42,9 +61,17 @@ class MainActivity : AppCompatActivity() {
     private var currentPage = Page.LOGIN
     private var permissionsPrompt: String? = null
     private var showLoginFields = false
+    private var portalOptions: List<PortalOption> = emptyList()
+    private var selectedPortalId = ""
+    private var backendAvailable: Boolean? = null
+    private var statusSocket: WebSocket? = null
+    private var socketConnected = false
+    private var allowSocketReconnect = false
+    private var healthCheckJob: Job? = null
+    private var reconnectJob: Job? = null
 
     private val permissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
+        ActivityResultContracts.RequestMultiplePermissions(),
     ) { _ ->
         if (requiredPermissions().all(::hasPermission)) {
             permissionsPrompt = null
@@ -64,6 +91,8 @@ class MainActivity : AppCompatActivity() {
         settingsStore = AppSettingsStore(this)
 
         val initialSettings = settingsStore.load()
+        portalOptions = settingsStore.availablePortals(initialSettings)
+        selectedPortalId = initialSettings.selectedPortalId.ifBlank { portalOptions.firstOrNull()?.portalId.orEmpty() }
         showLoginFields = initialSettings.apiToken.isBlank()
         populateForm(initialSettings)
         binding.tvInstructions.text = getString(R.string.ui_about_body, appVersionName())
@@ -74,6 +103,13 @@ class MainActivity : AppCompatActivity() {
 
         binding.navView.setNavigationItemSelectedListener { item ->
             handleNavigation(item)
+        }
+
+        binding.etPortalSelector.setOnItemClickListener { _, _, position, _ ->
+            portalOptions.getOrNull(position)?.let { portal ->
+                applyPortalSelection(portal, persist = true)
+                refreshUi()
+            }
         }
 
         binding.btnRequestPermissions.setOnClickListener {
@@ -107,6 +143,11 @@ class MainActivity : AppCompatActivity() {
             showLoginFields = true
             permissionsPrompt = null
             refreshUi()
+            showPage(Page.LOGIN)
+        }
+
+        binding.btnUnpairDevice.setOnClickListener {
+            unpairDevice()
         }
 
         binding.btnSaveSettings.setOnClickListener {
@@ -119,12 +160,19 @@ class MainActivity : AppCompatActivity() {
 
         showPage(if (initialSettings.apiToken.isNotBlank()) Page.STATUS else Page.LOGIN, closeDrawer = false)
         refreshUi()
+        refreshPortalConfig(showErrors = false)
         refreshStatus(showErrors = false)
     }
 
     override fun onResume() {
         super.onResume()
         refreshUi()
+        syncStatusRealtimeState(forceReconnect = currentPage == Page.STATUS)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        stopStatusRealtimeState()
     }
 
     private fun refreshUi() {
@@ -148,17 +196,49 @@ class MainActivity : AppCompatActivity() {
 
         val settings = settingsStore.load()
         val hasSavedLogin = settings.apiToken.isNotBlank()
-        val isLoggedIn = hasSavedLogin && settings.statusCode == "success" && settings.currentPhase == "ready"
+        val isLoggedIn = settings.paired && settings.statusCode == "success" && settings.currentPhase == "ready"
         if (!hasSavedLogin) {
             showLoginFields = true
         }
+
+        portalOptions = settingsStore.availablePortals(settings)
+        if (selectedPortalId.isBlank()) {
+            selectedPortalId = settings.selectedPortalId.ifBlank { portalOptions.firstOrNull()?.portalId.orEmpty() }
+        }
+        val selectedPortal = currentSelectedPortal(settings)
+        renderPortalSelection(selectedPortal)
+
+        val navHeaderView = binding.navView.getHeaderView(0)
+        val statusBadgeIndicator = navHeaderView.findViewById<View>(R.id.status_badge_indicator)
+        val statusBadgeText = navHeaderView.findViewById<TextView>(R.id.status_badge_text)
+        val statusBadgeSubtext = navHeaderView.findViewById<TextView>(R.id.status_badge_subtext)
+
+        val connectionLabel = when {
+            socketConnected -> getString(R.string.status_badge_connected)
+            statusSocket != null -> getString(R.string.ui_realtime_connecting)
+            else -> getString(R.string.status_badge_disconnected)
+        }
+        val pairedLabel = if (settings.paired || hasSavedLogin) {
+            getString(R.string.status_badge_paired)
+        } else {
+            getString(R.string.status_badge_not_paired)
+        }
+        statusBadgeText.text = getString(R.string.status_badge_combined, connectionLabel, pairedLabel)
+        statusBadgeSubtext.text = selectedPortal?.name ?: getString(R.string.status_badge_subtext_waiting)
+        val indicatorColor = when {
+            socketConnected -> android.R.color.holo_green_light
+            settings.statusCode == "error" -> android.R.color.holo_red_light
+            settings.paired || hasSavedLogin -> android.R.color.holo_orange_light
+            else -> android.R.color.darker_gray
+        }
+        statusBadgeIndicator.setBackgroundColor(getColor(indicatorColor))
 
         binding.loginStateCard.isVisible = hasSavedLogin && !showLoginFields
         binding.loginFormContainer.isVisible = !hasSavedLogin || showLoginFields
         binding.btnSaveSetup.text = getString(if (hasSavedLogin) R.string.ui_btn_relogin else R.string.ui_btn_save_setup)
         binding.tvLoginStateTitle.text = getString(if (isLoggedIn) R.string.ui_login_state_logged_in else R.string.ui_login_state_paired)
         binding.tvLoginStateBody.text = if (isLoggedIn) {
-            getString(R.string.ui_login_state_logged_in_body, settings.lastSuccessAt.ifBlank { "-" })
+            getString(R.string.ui_login_state_logged_in_body, formatTimestampForDisplay(settings.lastSuccessAt))
         } else {
             getString(R.string.ui_login_state_paired_body, settings.lastMessage.ifBlank { "-" })
         }
@@ -166,7 +246,7 @@ class MainActivity : AppCompatActivity() {
         binding.tvSavedConfiguration.text = getString(
             R.string.ui_saved_configuration_value,
             settings.backendBaseUrl,
-            settings.loginUrl,
+            selectedPortal?.name ?: settings.selectedPortalName.ifBlank { getString(R.string.ui_unknown_portal) },
             mask(settings.username),
             if (settings.apiToken.isNotBlank()) getString(R.string.ui_yes) else getString(R.string.ui_no),
         )
@@ -176,8 +256,26 @@ class MainActivity : AppCompatActivity() {
             mapPhase(settings.currentPhase),
             settings.lastMessage.ifBlank { "-" },
             settings.lastError.ifBlank { "-" },
-            settings.lastSuccessAt.ifBlank { "-" },
+            formatTimestampForDisplay(settings.lastSuccessAt),
             if (settings.fcmConfigured) getString(R.string.ui_yes) else getString(R.string.ui_no),
+        )
+        val realtimeLabel = when {
+            socketConnected -> getString(R.string.ui_realtime_connected)
+            statusSocket != null -> getString(R.string.ui_realtime_connecting)
+            else -> getString(R.string.ui_realtime_disconnected)
+        }
+        binding.tvRealtimeStatus.text = getString(
+            R.string.ui_realtime_status_value,
+            realtimeLabel,
+            pairedLabel,
+        )
+        binding.tvBackendLiveness.text = getString(
+            R.string.ui_backend_liveness_value,
+            when (backendAvailable) {
+                true -> getString(R.string.ui_backend_available)
+                false -> getString(R.string.ui_backend_unavailable)
+                null -> getString(R.string.ui_backend_checking)
+            },
         )
 
         if (settings.fcmToken.isNotBlank()) {
@@ -196,8 +294,44 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun refreshPortalConfig(showErrors: Boolean) {
+        val settings = settingsStore.load()
+        val backendUrl = binding.etBackendUrl.text?.toString().orEmpty().trim().ifBlank { settings.backendBaseUrl }
+        lifecycleScope.launch {
+            try {
+                val config = backendApi.fetchMobileConfig(backendUrl)
+                applyPortalConfig(config)
+                refreshUi()
+            } catch (exception: Exception) {
+                if (showErrors) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        exception.message ?: getString(R.string.toast_portal_config_failed),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+        }
+    }
+
+    private fun applyPortalConfig(config: MobileConfig) {
+        settingsStore.savePortalCatalog(config)
+        portalOptions = config.portals
+        val settings = settingsStore.load()
+        val selectedPortal = config.portals.firstOrNull { it.portalId == selectedPortalId }
+            ?: config.portals.firstOrNull { it.portalId == settings.selectedPortalId }
+            ?: config.portals.firstOrNull { it.portalId == config.defaultPortalId }
+            ?: config.portals.firstOrNull()
+        if (selectedPortal != null) {
+            applyPortalSelection(selectedPortal, persist = true)
+        }
+    }
+
     private fun submitSetup() {
-        val loginUrl = binding.etLoginUrl.text?.toString().orEmpty().trim()
+        val selectedPortal = currentSelectedPortal() ?: run {
+            Toast.makeText(this, R.string.toast_missing_form_fields, Toast.LENGTH_LONG).show()
+            return
+        }
         val username = binding.etUsername.text?.toString().orEmpty().trim()
         val password = binding.etPassword.text?.toString().orEmpty()
 
@@ -208,7 +342,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        if (loginUrl.isBlank() || username.isBlank() || password.isBlank()) {
+        if (username.isBlank() || password.isBlank()) {
             Toast.makeText(this, R.string.toast_missing_form_fields, Toast.LENGTH_LONG).show()
             return
         }
@@ -216,7 +350,6 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             setBusy(true)
             try {
-                // The app fetches the current FCM token on demand so the backend always stores a fresh callback target.
                 val fcmToken = fetchFcmToken()
                 val currentSettings = settingsStore.load()
                 val backendUrl = binding.etBackendUrl.text?.toString().orEmpty().trim()
@@ -224,18 +357,24 @@ class MainActivity : AppCompatActivity() {
                 val setupSecret = binding.etSetupSecret.text?.toString().orEmpty().trim()
                 val deviceLabel = binding.etDeviceLabel.text?.toString().orEmpty().trim()
                     .ifBlank { currentSettings.deviceLabel }
+
                 settingsStore.saveSetupFields(
                     backendBaseUrl = BackendApi.normalizeBaseUrl(backendUrl),
-                    loginUrl = loginUrl,
+                    loginUrl = selectedPortal.loginUrl,
                     username = username,
                     setupSecret = setupSecret,
                     deviceLabel = deviceLabel,
+                    selectedPortalId = selectedPortal.portalId,
+                    selectedPortalName = selectedPortal.name,
+                    selectedPortalLogoUrl = selectedPortal.logoUrl,
                 )
                 settingsStore.saveFcmToken(fcmToken)
                 refreshUi()
+
                 val response = backendApi.submitSetup(
                     backendBaseUrl = backendUrl,
-                    loginUrl = loginUrl,
+                    loginUrl = selectedPortal.loginUrl,
+                    portalId = selectedPortal.portalId,
                     username = username,
                     password = password,
                     fcmToken = fcmToken,
@@ -246,13 +385,22 @@ class MainActivity : AppCompatActivity() {
 
                 response.apiToken?.let(settingsStore::saveApiToken)
                 settingsStore.saveStatus(response.status)
+                settingsStore.savePortalCatalog(
+                    MobileConfig(
+                        publicBaseUrl = response.status.publicBaseUrl,
+                        defaultPortalId = response.status.portalId,
+                        portals = response.status.portals.ifEmpty { portalOptions },
+                    ),
+                )
                 settingsStore.saveLastMessage(response.message)
+                backendAvailable = true
                 binding.etPassword.setText("")
                 permissionsPrompt = null
                 showLoginFields = false
                 Toast.makeText(this@MainActivity, response.message, Toast.LENGTH_LONG).show()
                 refreshUi()
                 showPage(Page.STATUS)
+                syncStatusRealtimeState(forceReconnect = true)
             } catch (exception: Exception) {
                 settingsStore.saveLastMessage(
                     getString(R.string.toast_setup_failed),
@@ -272,16 +420,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun saveAdvancedSettings(showToast: Boolean) {
         val currentSettings = settingsStore.load()
+        val selectedPortal = currentSelectedPortal(currentSettings)
         settingsStore.saveSetupFields(
             backendBaseUrl = BackendApi.normalizeBaseUrl(
                 binding.etBackendUrl.text?.toString().orEmpty().trim().ifBlank { currentSettings.backendBaseUrl },
             ),
-            loginUrl = binding.etLoginUrl.text?.toString().orEmpty().trim().ifBlank { currentSettings.loginUrl },
+            loginUrl = selectedPortal?.loginUrl ?: currentSettings.loginUrl,
             username = binding.etUsername.text?.toString().orEmpty().trim().ifBlank { currentSettings.username },
             setupSecret = binding.etSetupSecret.text?.toString().orEmpty().trim(),
             deviceLabel = binding.etDeviceLabel.text?.toString().orEmpty().trim().ifBlank { currentSettings.deviceLabel },
+            selectedPortalId = selectedPortal?.portalId ?: currentSettings.selectedPortalId,
+            selectedPortalName = selectedPortal?.name ?: currentSettings.selectedPortalName,
+            selectedPortalLogoUrl = selectedPortal?.logoUrl ?: currentSettings.selectedPortalLogoUrl,
         )
         populateForm(settingsStore.load())
+        refreshPortalConfig(showErrors = false)
         refreshUi()
         if (showToast) {
             Toast.makeText(this, R.string.toast_settings_saved, Toast.LENGTH_SHORT).show()
@@ -301,15 +454,24 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                // The latest backend state is reloaded explicitly because login completion happens remotely.
                 val status = backendApi.fetchStatus(
                     backendBaseUrl = settings.backendBaseUrl,
                     apiToken = settings.apiToken,
                 )
                 settingsStore.saveStatus(status)
+                settingsStore.savePortalCatalog(
+                    MobileConfig(
+                        publicBaseUrl = status.publicBaseUrl,
+                        defaultPortalId = status.portalId,
+                        portals = status.portals.ifEmpty { portalOptions },
+                    ),
+                )
                 settingsStore.saveLastMessage(status.sync.lastMessage, status.sync.lastError)
+                backendAvailable = true
                 refreshUi()
             } catch (exception: Exception) {
+                backendAvailable = false
+                refreshUi()
                 if (showErrors) {
                     Toast.makeText(
                         this@MainActivity,
@@ -321,16 +483,254 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun unpairDevice() {
+        AlertDialog.Builder(this)
+            .setTitle("Ontkoppelen?")
+            .setMessage("Weet je zeker dat je dit apparaat wilt ontkoppelen? De koppeling wordt ook op de backend verwijderd.")
+            .setPositiveButton("Ja, ontkoppelen") { _, _ ->
+                lifecycleScope.launch {
+                    setBusy(true)
+                    val settings = settingsStore.load()
+                    try {
+                        if (settings.backendBaseUrl.isNotBlank() && settings.apiToken.isNotBlank()) {
+                            backendApi.removeDevice(settings.backendBaseUrl, settings.apiToken)
+                        }
+                        settingsStore.clearPairing()
+                        backendAvailable = null
+                        showLoginFields = true
+                        permissionsPrompt = null
+                        stopStatusRealtimeState()
+                        refreshUi()
+                        showPage(Page.LOGIN)
+                        Toast.makeText(this@MainActivity, R.string.toast_unpair_success, Toast.LENGTH_LONG).show()
+                    } catch (exception: Exception) {
+                        if (shouldClearPairingAfterFailure(exception.message)) {
+                            settingsStore.clearPairing()
+                            backendAvailable = null
+                            showLoginFields = true
+                            permissionsPrompt = null
+                            stopStatusRealtimeState()
+                            refreshUi()
+                            showPage(Page.LOGIN)
+                            Toast.makeText(this@MainActivity, R.string.toast_unpair_success, Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(
+                                this@MainActivity,
+                                exception.message ?: getString(R.string.toast_unpair_failed),
+                                Toast.LENGTH_LONG,
+                            ).show()
+                        }
+                    } finally {
+                        setBusy(false)
+                    }
+                }
+            }
+            .setNegativeButton("Annuleren", null)
+            .show()
+    }
+
     private fun populateForm(settings: AppSettings) {
         binding.etBackendUrl.setText(settings.backendBaseUrl)
-        binding.etLoginUrl.setText(settings.loginUrl)
         binding.etUsername.setText(settings.username)
         binding.etSetupSecret.setText(settings.setupSecret)
         binding.etDeviceLabel.setText(settings.deviceLabel)
+        renderPortalSelection(currentSelectedPortal(settings))
+    }
+
+    private fun renderPortalSelection(portal: PortalOption?) {
+        val adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_list_item_1,
+            portalOptions.map { it.name },
+        )
+        binding.etPortalSelector.setAdapter(adapter)
+        binding.etPortalSelector.setText(portal?.name.orEmpty(), false)
+        binding.ivPortalLogo.isVisible = !portal?.logoUrl.isNullOrBlank()
+        if (portal?.logoUrl.isNullOrBlank()) {
+            binding.ivPortalLogo.setImageDrawable(null)
+        } else {
+            binding.ivPortalLogo.load(portal?.logoUrl)
+        }
+    }
+
+    private fun applyPortalSelection(portal: PortalOption, persist: Boolean) {
+        selectedPortalId = portal.portalId
+        if (persist) {
+            settingsStore.saveSelectedPortal(portal)
+        }
+        renderPortalSelection(portal)
+    }
+
+    private fun currentSelectedPortal(settings: AppSettings = settingsStore.load()): PortalOption? {
+        val effectivePortals = if (portalOptions.isNotEmpty()) portalOptions else settingsStore.availablePortals(settings)
+        return effectivePortals.firstOrNull { it.portalId == selectedPortalId }
+            ?: effectivePortals.firstOrNull { it.portalId == settings.selectedPortalId }
+            ?: effectivePortals.firstOrNull()
+    }
+
+    private fun syncStatusRealtimeState(forceReconnect: Boolean = false) {
+        val settings = settingsStore.load()
+        val shouldRun = currentPage == Page.STATUS &&
+            settings.backendBaseUrl.isNotBlank() &&
+            settings.apiToken.isNotBlank() &&
+            lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+
+        if (!shouldRun) {
+            stopStatusRealtimeState()
+            refreshUi()
+            return
+        }
+
+        allowSocketReconnect = true
+        startHealthChecks(settings.backendBaseUrl)
+        if (forceReconnect) {
+            stopStatusSocket()
+        }
+        if (statusSocket == null) {
+            startStatusSocket(settings.backendBaseUrl, settings.apiToken)
+        }
+    }
+
+    private fun stopStatusRealtimeState() {
+        allowSocketReconnect = false
+        stopHealthChecks()
+        stopStatusSocket()
+    }
+
+    private fun startHealthChecks(backendBaseUrl: String) {
+        if (healthCheckJob != null) {
+            return
+        }
+
+        healthCheckJob = lifecycleScope.launch {
+            while (isActive && allowSocketReconnect) {
+                backendAvailable = try {
+                    backendApi.checkHealth(backendBaseUrl)
+                } catch (_: Exception) {
+                    false
+                }
+                refreshUi()
+                delay(if (backendAvailable == true) 15_000L else 5_000L)
+            }
+        }
+    }
+
+    private fun stopHealthChecks() {
+        healthCheckJob?.cancel()
+        healthCheckJob = null
+    }
+
+    private fun startStatusSocket(backendBaseUrl: String, apiToken: String) {
+        reconnectJob?.cancel()
+        reconnectJob = null
+        socketConnected = false
+        refreshUi()
+        var expectedSocket: WebSocket? = null
+        val socket = backendApi.openStatusWebSocket(
+            backendBaseUrl = backendBaseUrl,
+            apiToken = apiToken,
+            onOpen = {
+                runOnUiThread {
+                    if (statusSocket !== expectedSocket) {
+                        return@runOnUiThread
+                    }
+                    socketConnected = true
+                    backendAvailable = true
+                    refreshUi()
+                }
+            },
+            onStatus = { status ->
+                runOnUiThread {
+                    if (statusSocket !== expectedSocket) {
+                        return@runOnUiThread
+                    }
+                    handleLiveStatus(status)
+                }
+            },
+            onClosed = { _ ->
+                runOnUiThread {
+                    if (statusSocket !== expectedSocket) {
+                        return@runOnUiThread
+                    }
+                    socketConnected = false
+                    statusSocket = null
+                    refreshUi()
+                    scheduleStatusSocketReconnect()
+                }
+            },
+            onFailure = { message ->
+                runOnUiThread {
+                    if (statusSocket !== expectedSocket) {
+                        return@runOnUiThread
+                    }
+                    socketConnected = false
+                    statusSocket = null
+                    backendAvailable = false
+                    settingsStore.saveLastMessage(
+                        settingsStore.load().lastMessage.ifBlank { getString(R.string.toast_status_refresh_failed) },
+                        message,
+                    )
+                    refreshUi()
+                    scheduleStatusSocketReconnect()
+                }
+            },
+        )
+        expectedSocket = socket
+        statusSocket = socket
+    }
+
+    private fun stopStatusSocket() {
+        reconnectJob?.cancel()
+        reconnectJob = null
+        val socket = statusSocket
+        statusSocket = null
+        socket?.close(1000, "closing")
+        socketConnected = false
+    }
+
+    private fun scheduleStatusSocketReconnect() {
+        if (!allowSocketReconnect || reconnectJob != null) {
+            return
+        }
+
+        reconnectJob = lifecycleScope.launch {
+            delay(2_000L)
+            reconnectJob = null
+            if (allowSocketReconnect) {
+                syncStatusRealtimeState(forceReconnect = true)
+            }
+        }
+    }
+
+    private fun handleLiveStatus(status: BackendStatus) {
+        settingsStore.saveStatus(status)
+        settingsStore.savePortalCatalog(
+            MobileConfig(
+                publicBaseUrl = status.publicBaseUrl,
+                defaultPortalId = status.portalId,
+                portals = status.portals.ifEmpty { portalOptions },
+            ),
+        )
+        if (status.portals.isNotEmpty()) {
+            portalOptions = status.portals
+        }
+        if (status.portalId.isNotBlank()) {
+            val selectedPortal = status.portals.firstOrNull { it.portalId == status.portalId }
+                ?: currentSelectedPortal()
+            if (selectedPortal != null) {
+                applyPortalSelection(selectedPortal, persist = true)
+            }
+        }
+        backendAvailable = true
+        refreshUi()
+    }
+
+    private fun shouldClearPairingAfterFailure(message: String?): Boolean {
+        val normalized = message.orEmpty().lowercase(Locale.ROOT)
+        return normalized.contains("bestaat niet meer") || normalized.contains("app-token")
     }
 
     private suspend fun fetchFcmToken(): String = suspendCancellableCoroutine { continuation ->
-        // Firebase still owns token refreshes, so the UI bridges the callback API into coroutines here.
         FirebaseMessaging.getInstance().token
             .addOnSuccessListener { token ->
                 if (continuation.isActive) {
@@ -350,6 +750,8 @@ class MainActivity : AppCompatActivity() {
         binding.btnRefreshStatus.isEnabled = !isBusy
         binding.btnRequestPermissions.isEnabled = !isBusy
         binding.btnCopyToken.isEnabled = !isBusy
+        binding.btnUnpairDevice.isEnabled = !isBusy
+        binding.etPortalSelector.isEnabled = !isBusy
     }
 
     private fun handleNavigation(item: MenuItem): Boolean {
@@ -376,6 +778,8 @@ class MainActivity : AppCompatActivity() {
         if (closeDrawer) {
             binding.drawerLayout.closeDrawer(GravityCompat.START)
         }
+        syncStatusRealtimeState(forceReconnect = page == Page.STATUS)
+        refreshUi()
     }
 
     private fun hasRequiredPermissions(): Boolean = requiredPermissions().all(::hasPermission)
@@ -399,6 +803,22 @@ class MainActivity : AppCompatActivity() {
             packageManager.getPackageInfo(packageName, 0)
         }
         return packageInfo.versionName ?: "-"
+    }
+
+    private fun formatTimestampForDisplay(value: String): String {
+        if (value.isBlank()) {
+            return "-"
+        }
+
+        return try {
+            val parser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+            val parsed = parser.parse(value) ?: return value
+            DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, Locale.getDefault()).format(parsed)
+        } catch (_: Exception) {
+            value
+        }
     }
 
     private fun mapStatusCode(statusCode: String): String {
@@ -428,6 +848,6 @@ class MainActivity : AppCompatActivity() {
         return value.take(2) + "*".repeat(value.length - 4) + value.takeLast(2)
     }
 
-    private fun hasPermission(p: String) =
-        ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED
+    private fun hasPermission(permission: String) =
+        ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 }

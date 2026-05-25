@@ -95,12 +95,28 @@
                             android:textSize="14sp"
                             tools:text="De backend bewaart je inloggegevens al." />
 
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btn_redo_login"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
+                        <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="@string/ui_btn_redo_login" />
+                            android:orientation="horizontal">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btn_redo_login"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/ui_btn_redo_login" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btn_unpair_device"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/ui_btn_unpair_device" />
+
+                        </LinearLayout>
 
                     </LinearLayout>
 
@@ -109,6 +125,43 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical">
+
+                        <ImageView
+                            android:id="@+id/iv_portal_logo"
+                            android:layout_width="96dp"
+                            android:layout_height="96dp"
+                            android:layout_gravity="center_horizontal"
+                            android:layout_marginBottom="12dp"
+                            android:contentDescription="@string/ui_portal_logo_content_description"
+                            android:scaleType="fitCenter"
+                            android:visibility="gone"
+                            tools:src="@drawable/ic_relay"
+                            tools:visibility="visible" />
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/til_portal_selector"
+                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="8dp"
+                            android:hint="@string/ui_portal_label">
+
+                            <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                                android:id="@+id/et_portal_selector"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:focusable="false"
+                                android:inputType="none" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <TextView
+                            android:id="@+id/tv_portal_helper"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="12dp"
+                            android:alpha="0.75"
+                            android:text="@string/ui_portal_help"
+                            android:textSize="13sp" />
 
                         <com.google.android.material.textfield.TextInputLayout
                             android:layout_width="match_parent"
@@ -135,19 +188,6 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:inputType="textPassword" />
-                        </com.google.android.material.textfield.TextInputLayout>
-
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginBottom="20dp"
-                            android:hint="@string/ui_login_url_label">
-
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/et_login_url"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:inputType="textUri" />
                         </com.google.android.material.textfield.TextInputLayout>
 
                         <com.google.android.material.button.MaterialButton
@@ -190,6 +230,26 @@
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="24dp"
                         android:text="@string/ui_btn_refresh_status" />
+
+                    <TextView
+                        android:id="@+id/tv_realtime_status"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:background="#EAF7EF"
+                        android:padding="14dp"
+                        android:textSize="14sp"
+                        tools:text="Realtime verbinding: verbonden" />
+
+                    <TextView
+                        android:id="@+id/tv_backend_liveness"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="18dp"
+                        android:background="#EEF6FF"
+                        android:padding="14dp"
+                        android:textSize="14sp"
+                        tools:text="Backend status: beschikbaar" />
 
                     <TextView
                         android:layout_width="match_parent"
@@ -420,6 +480,7 @@
         android:layout_height="match_parent"
         android:layout_gravity="start"
         android:fitsSystemWindows="true"
+        app:headerLayout="@layout/navigation_header"
         app:menu="@menu/main_drawer_menu" />
 
 </androidx.drawerlayout.widget.DrawerLayout>
