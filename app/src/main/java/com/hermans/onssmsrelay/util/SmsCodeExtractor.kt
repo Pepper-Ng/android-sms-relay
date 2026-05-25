@@ -1,4 +1,4 @@
-package nl.landvanhorne.smsrelay.util
+package com.hermans.onssmsrelay.util
 
 object SmsCodeExtractor {
 

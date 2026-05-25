@@ -1,4 +1,4 @@
-package nl.landvanhorne.smsrelay.util
+package com.hermans.onssmsrelay.util
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

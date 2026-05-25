@@ -1,4 +1,4 @@
-package nl.landvanhorne.smsrelay.fcm
+package com.hermans.onssmsrelay.fcm
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -15,10 +15,10 @@ import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import kotlinx.coroutines.*
-import nl.landvanhorne.smsrelay.R
-import nl.landvanhorne.smsrelay.data.AppSettingsStore
-import nl.landvanhorne.smsrelay.data.BackendApi
-import nl.landvanhorne.smsrelay.util.SmsCodeExtractor
+import com.hermans.onssmsrelay.R
+import com.hermans.onssmsrelay.data.AppSettingsStore
+import com.hermans.onssmsrelay.data.BackendApi
+import com.hermans.onssmsrelay.util.SmsCodeExtractor
 import okhttp3.*
 import java.util.concurrent.TimeUnit
 

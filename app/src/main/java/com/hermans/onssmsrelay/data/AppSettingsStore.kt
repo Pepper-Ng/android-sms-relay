@@ -1,4 +1,4 @@
-package nl.landvanhorne.smsrelay.data
+package com.hermans.onssmsrelay.data
 
 import android.content.Context
 import android.os.Build

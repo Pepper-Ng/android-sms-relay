@@ -1,4 +1,4 @@
-package nl.landvanhorne.smsrelay.data
+package com.hermans.onssmsrelay.data
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals

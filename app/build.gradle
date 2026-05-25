@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace 'nl.landvanhorne.smsrelay'
+    namespace 'com.hermans.onssmsrelay'
     compileSdk 34
 
     defaultConfig {
-        applicationId "nl.landvanhorne.smsrelay"
+        applicationId "com.hermans.onssmsrelay"
         minSdk 21
         targetSdk 34
         versionCode 2

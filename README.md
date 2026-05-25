@@ -85,7 +85,7 @@ All user-facing text is stored in Dutch string resources.
 
 - Android Studio with a current Android Gradle Plugin toolchain
 - Android SDK for API 34
-- Firebase project configured for package name `nl.landvanhorne.smsrelay`
+- Firebase project configured for package name `com.hermans.onssmsrelay`
 - `google-services.json` placed in `app/`
 
 ## Build and test

@@ -1,4 +1,4 @@
-package nl.landvanhorne.smsrelay.ui
+package com.hermans.onssmsrelay.ui
 
 import android.Manifest
 import android.content.*
@@ -15,11 +15,11 @@ import androidx.lifecycle.lifecycleScope
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
-import nl.landvanhorne.smsrelay.R
-import nl.landvanhorne.smsrelay.data.AppSettings
-import nl.landvanhorne.smsrelay.data.AppSettingsStore
-import nl.landvanhorne.smsrelay.data.BackendApi
-import nl.landvanhorne.smsrelay.databinding.ActivityMainBinding
+import com.hermans.onssmsrelay.R
+import com.hermans.onssmsrelay.data.AppSettings
+import com.hermans.onssmsrelay.data.AppSettingsStore
+import com.hermans.onssmsrelay.data.BackendApi
+import com.hermans.onssmsrelay.databinding.ActivityMainBinding
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -295,4 +295,3 @@ class MainActivity : AppCompatActivity() {
     private fun hasPermission(p: String) =
         ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED
 }
-
