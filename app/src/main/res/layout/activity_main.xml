@@ -1,244 +1,425 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.drawerlayout.widget.DrawerLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/drawer_layout"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_horizontal"
-        android:orientation="vertical"
-        android:padding="24dp"
-        android:paddingBottom="32dp">
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="4dp"
-            android:text="@string/ui_title"
-            android:textAlignment="center"
-            android:textSize="24sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:alpha="0.55"
-            android:layout_marginBottom="28dp"
-            android:text="@string/ui_subtitle"
-            android:textAlignment="center"
-            android:textSize="13sp" />
-
-        <TextView
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/top_app_bar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="6dp"
-            android:text="@string/ui_permissions_title"
-            android:textStyle="bold" />
+            android:background="?attr/colorPrimary"
+            android:elevation="4dp"
+            android:theme="@style/ThemeOverlay.Material3.Dark.ActionBar"
+            app:navigationIcon="@drawable/ic_menu_24"
+            app:navigationIconTint="@android:color/white"
+            app:titleTextColor="@android:color/white"
+            app:title="@string/menu_login" />
 
-        <TextView
-            android:id="@+id/tv_permissions_status"
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            android:background="#F0F4FF"
-            android:padding="14dp"
-            android:text="@string/ui_sms_permission_missing"
-            android:textSize="15sp" />
+            android:layout_height="0dp"
+            android:layout_weight="1">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_request_permissions"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:text="@string/ui_btn_request_permissions" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_battery_optimization"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            android:text="@string/ui_btn_battery_optimization" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:alpha="0.7"
-            android:layout_marginBottom="6dp"
-            android:text="@string/ui_backend_title"
-            android:textStyle="bold" />
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="10dp"
-            android:hint="@string/ui_backend_url_label">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/et_backend_url"
+            <ScrollView
+                android:id="@+id/page_login"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="textUri" />
-        </com.google.android.material.textfield.TextInputLayout>
+                android:layout_height="match_parent"
+                android:fillViewport="true">
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="10dp"
-            android:hint="@string/ui_login_url_label">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="24dp"
+                    android:paddingBottom="32dp">
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/et_login_url"
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="4dp"
+                        android:text="@string/ui_title"
+                        android:textSize="28sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="24dp"
+                        android:alpha="0.7"
+                        android:text="@string/ui_subtitle"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp"
+                        android:background="#EEF6FF"
+                        android:padding="14dp"
+                        android:text="@string/ui_login_helper"
+                        android:textSize="14sp" />
+
+                    <LinearLayout
+                        android:id="@+id/login_state_card"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="20dp"
+                        android:background="#E7F6EC"
+                        android:orientation="vertical"
+                        android:padding="16dp"
+                        android:visibility="gone"
+                        tools:visibility="visible">
+
+                        <TextView
+                            android:id="@+id/tv_login_state_title"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="6dp"
+                            android:textStyle="bold"
+                            android:textSize="18sp"
+                            tools:text="Je bent al ingelogd" />
+
+                        <TextView
+                            android:id="@+id/tv_login_state_body"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="12dp"
+                            android:textSize="14sp"
+                            tools:text="De backend bewaart je inloggegevens al." />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_redo_login"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/ui_btn_redo_login" />
+
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/login_form_container"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="12dp"
+                            android:hint="@string/ui_username_label">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/et_username"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="text" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="12dp"
+                            android:hint="@string/ui_password_label"
+                            app:endIconMode="password_toggle">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/et_password"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="textPassword" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="20dp"
+                            android:hint="@string/ui_login_url_label">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/et_login_url"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="textUri" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_save_setup"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/ui_btn_save_setup" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+            </ScrollView>
+
+            <ScrollView
+                android:id="@+id/page_status"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="textUri" />
-        </com.google.android.material.textfield.TextInputLayout>
+                android:layout_height="match_parent"
+                android:fillViewport="true"
+                android:visibility="gone">
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="10dp"
-            android:hint="@string/ui_username_label">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="24dp"
+                    android:paddingBottom="32dp">
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/et_username"
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp"
+                        android:alpha="0.7"
+                        android:text="@string/ui_status_intro"
+                        android:textSize="14sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_refresh_status"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="24dp"
+                        android:text="@string/ui_btn_refresh_status" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="6dp"
+                        android:text="@string/ui_status_title"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tv_backend_status"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="18dp"
+                        android:background="#EEF6F0"
+                        android:padding="14dp"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="6dp"
+                        android:text="@string/ui_saved_title"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tv_saved_configuration"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="#F7F4ED"
+                        android:padding="14dp"
+                        android:textSize="14sp" />
+
+                </LinearLayout>
+            </ScrollView>
+
+            <ScrollView
+                android:id="@+id/page_permissions"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="textEmailAddress" />
-        </com.google.android.material.textfield.TextInputLayout>
+                android:layout_height="match_parent"
+                android:fillViewport="true"
+                android:visibility="gone">
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="10dp"
-            android:hint="@string/ui_password_label"
-            app:endIconMode="password_toggle">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="24dp"
+                    android:paddingBottom="32dp">
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/et_password"
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:text="@string/ui_permissions_intro"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/tv_permissions_gate_message"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:background="#FFF2E2"
+                        android:padding="14dp"
+                        android:textSize="14sp"
+                        android:visibility="gone"
+                        tools:text="Log in requires permissions first." />
+
+                    <TextView
+                        android:id="@+id/tv_permissions_status"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:background="#F0F4FF"
+                        android:padding="14dp"
+                        android:text="@string/ui_sms_permission_missing"
+                        android:textSize="15sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_request_permissions"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp"
+                        android:text="@string/ui_btn_request_permissions" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_battery_optimization"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/ui_btn_battery_optimization" />
+
+                </LinearLayout>
+            </ScrollView>
+
+            <ScrollView
+                android:id="@+id/page_settings"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="textPassword" />
-        </com.google.android.material.textfield.TextInputLayout>
+                android:layout_height="match_parent"
+                android:fillViewport="true"
+                android:visibility="gone">
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="10dp"
-            android:hint="@string/ui_setup_secret_label">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="24dp"
+                    android:paddingBottom="32dp">
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/et_setup_secret"
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp"
+                        android:alpha="0.7"
+                        android:text="@string/ui_settings_intro"
+                        android:textSize="14sp" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:hint="@string/ui_backend_url_label"
+                        app:helperText="@string/ui_backend_url_help">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/et_backend_url"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textUri" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:hint="@string/ui_setup_secret_label"
+                        app:endIconMode="password_toggle"
+                        app:helperText="@string/ui_setup_secret_help">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/et_setup_secret"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textPassword" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp"
+                        android:hint="@string/ui_device_label_label"
+                        app:helperText="@string/ui_device_label_help">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/et_device_label"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textCapWords" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_save_settings"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="24dp"
+                        android:text="@string/ui_btn_save_settings" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="6dp"
+                        android:text="@string/ui_token_title"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tv_fcm_token"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp"
+                        android:background="#EEEEEE"
+                        android:fontFamily="monospace"
+                        android:padding="12dp"
+                        android:text="@string/ui_token_loading"
+                        android:textSize="11sp"
+                        tools:text="abc123" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_copy_token"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/ui_btn_copy_token" />
+
+                </LinearLayout>
+            </ScrollView>
+
+            <ScrollView
+                android:id="@+id/page_about"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="textPassword" />
-        </com.google.android.material.textfield.TextInputLayout>
+                android:layout_height="match_parent"
+                android:fillViewport="true"
+                android:visibility="gone">
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:hint="@string/ui_device_label_label">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="24dp"
+                    android:paddingBottom="32dp">
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/et_device_label"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="textCapWords" />
-        </com.google.android.material.textfield.TextInputLayout>
+                    <TextView
+                        android:id="@+id/tv_instructions"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:alpha="0.8"
+                        android:lineSpacingMultiplier="1.4"
+                        android:textSize="14sp" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_save_setup"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:text="@string/ui_btn_save_setup" />
+                </LinearLayout>
+            </ScrollView>
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_refresh_status"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            android:text="@string/ui_btn_refresh_status" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="6dp"
-            android:text="@string/ui_status_title"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/tv_backend_status"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="18dp"
-            android:background="#EEF6F0"
-            android:padding="14dp"
-            android:textSize="14sp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="6dp"
-            android:text="@string/ui_saved_title"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/tv_saved_configuration"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="18dp"
-            android:background="#F7F4ED"
-            android:padding="14dp"
-            android:textSize="14sp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="6dp"
-            android:text="@string/ui_token_title"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/tv_fcm_token"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="#EEEEEE"
-            android:fontFamily="monospace"
-            android:layout_marginBottom="8dp"
-            android:padding="12dp"
-            android:text="@string/ui_token_loading"
-            android:textSize="11sp"
-            tools:text="abc123" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_copy_token"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            android:text="@string/ui_btn_copy_token" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="6dp"
-            android:text="@string/ui_instructions_title"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/tv_instructions"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:alpha="0.65"
-            android:lineSpacingMultiplier="1.4"
-            android:text="@string/ui_instructions"
-            android:textSize="13sp" />
-
+        </FrameLayout>
     </LinearLayout>
-</ScrollView>
+
+    <com.google.android.material.navigation.NavigationView
+        android:id="@+id/nav_view"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:fitsSystemWindows="true"
+        app:menu="@menu/main_drawer_menu" />
+
+</androidx.drawerlayout.widget.DrawerLayout>

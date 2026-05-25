@@ -7,10 +7,13 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.MenuItem
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.GravityCompat
+import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.launch
@@ -25,17 +28,31 @@ import kotlin.coroutines.resumeWithException
 
 class MainActivity : AppCompatActivity() {
 
+    private enum class Page(val menuItemId: Int, val titleRes: Int) {
+        LOGIN(R.id.nav_login, R.string.menu_login),
+        STATUS(R.id.nav_status, R.string.menu_status),
+        PERMISSIONS(R.id.nav_permissions, R.string.menu_permissions),
+        SETTINGS(R.id.nav_settings, R.string.menu_settings),
+        ABOUT(R.id.nav_about, R.string.menu_about),
+    }
+
     private lateinit var binding: ActivityMainBinding
     private lateinit var settingsStore: AppSettingsStore
     private val backendApi = BackendApi()
+    private var currentPage = Page.LOGIN
+    private var permissionsPrompt: String? = null
+    private var showLoginFields = false
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { results ->
-        if (results.values.all { it }) {
+    ) { _ ->
+        if (requiredPermissions().all(::hasPermission)) {
+            permissionsPrompt = null
             Toast.makeText(this, R.string.toast_permission_granted, Toast.LENGTH_SHORT).show()
+            showPage(Page.LOGIN)
         } else {
             Toast.makeText(this, R.string.toast_permission_denied, Toast.LENGTH_LONG).show()
+            showPage(Page.PERMISSIONS)
         }
         refreshUi()
     }
@@ -46,17 +63,21 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         settingsStore = AppSettingsStore(this)
 
-        populateForm(settingsStore.load())
+        val initialSettings = settingsStore.load()
+        showLoginFields = initialSettings.apiToken.isBlank()
+        populateForm(initialSettings)
+        binding.tvInstructions.text = getString(R.string.ui_about_body, appVersionName())
+
+        binding.topAppBar.setNavigationOnClickListener {
+            binding.drawerLayout.openDrawer(GravityCompat.START)
+        }
+
+        binding.navView.setNavigationItemSelectedListener { item ->
+            handleNavigation(item)
+        }
 
         binding.btnRequestPermissions.setOnClickListener {
-            val permissions = mutableListOf(
-                Manifest.permission.RECEIVE_SMS,
-                Manifest.permission.READ_SMS
-            )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                permissions.add(Manifest.permission.POST_NOTIFICATIONS)
-            }
-            permissionLauncher.launch(permissions.toTypedArray())
+            permissionLauncher.launch(requiredPermissions().toTypedArray())
         }
 
         binding.btnBatteryOptimization.setOnClickListener {
@@ -82,10 +103,21 @@ class MainActivity : AppCompatActivity() {
             submitSetup()
         }
 
+        binding.btnRedoLogin.setOnClickListener {
+            showLoginFields = true
+            permissionsPrompt = null
+            refreshUi()
+        }
+
+        binding.btnSaveSettings.setOnClickListener {
+            saveAdvancedSettings(showToast = true)
+        }
+
         binding.btnRefreshStatus.setOnClickListener {
             refreshStatus(showErrors = true)
         }
 
+        showPage(if (initialSettings.apiToken.isNotBlank()) Page.STATUS else Page.LOGIN, closeDrawer = false)
         refreshUi()
         refreshStatus(showErrors = false)
     }
@@ -97,12 +129,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun refreshUi() {
         val smsOk = hasPermission(Manifest.permission.RECEIVE_SMS) &&
-                    hasPermission(Manifest.permission.READ_SMS)
+            hasPermission(Manifest.permission.READ_SMS)
         val notificationsOk = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             hasPermission(Manifest.permission.POST_NOTIFICATIONS)
         } else {
             true
         }
+        val permissionsGranted = smsOk && notificationsOk
 
         binding.tvPermissionsStatus.text = when {
             smsOk && notificationsOk -> getString(R.string.ui_all_permissions_granted)
@@ -110,8 +143,26 @@ class MainActivity : AppCompatActivity() {
             !smsOk -> getString(R.string.ui_sms_permission_missing)
             else -> getString(R.string.ui_notif_permission_missing)
         }
+        binding.tvPermissionsGateMessage.isVisible = !permissionsGranted && !permissionsPrompt.isNullOrBlank()
+        binding.tvPermissionsGateMessage.text = permissionsPrompt.orEmpty()
 
         val settings = settingsStore.load()
+        val hasSavedLogin = settings.apiToken.isNotBlank()
+        val isLoggedIn = hasSavedLogin && settings.statusCode == "success" && settings.currentPhase == "ready"
+        if (!hasSavedLogin) {
+            showLoginFields = true
+        }
+
+        binding.loginStateCard.isVisible = hasSavedLogin && !showLoginFields
+        binding.loginFormContainer.isVisible = !hasSavedLogin || showLoginFields
+        binding.btnSaveSetup.text = getString(if (hasSavedLogin) R.string.ui_btn_relogin else R.string.ui_btn_save_setup)
+        binding.tvLoginStateTitle.text = getString(if (isLoggedIn) R.string.ui_login_state_logged_in else R.string.ui_login_state_paired)
+        binding.tvLoginStateBody.text = if (isLoggedIn) {
+            getString(R.string.ui_login_state_logged_in_body, settings.lastSuccessAt.ifBlank { "-" })
+        } else {
+            getString(R.string.ui_login_state_paired_body, settings.lastMessage.ifBlank { "-" })
+        }
+
         binding.tvSavedConfiguration.text = getString(
             R.string.ui_saved_configuration_value,
             settings.backendBaseUrl,
@@ -143,18 +194,21 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-        binding.tvInstructions.text = getString(R.string.ui_instructions)
     }
 
     private fun submitSetup() {
-        val backendUrl = binding.etBackendUrl.text?.toString().orEmpty().trim()
         val loginUrl = binding.etLoginUrl.text?.toString().orEmpty().trim()
         val username = binding.etUsername.text?.toString().orEmpty().trim()
         val password = binding.etPassword.text?.toString().orEmpty()
-        val setupSecret = binding.etSetupSecret.text?.toString().orEmpty().trim()
-        val deviceLabel = binding.etDeviceLabel.text?.toString().orEmpty().trim()
 
-        if (backendUrl.isBlank() || loginUrl.isBlank() || username.isBlank() || password.isBlank()) {
+        if (!hasRequiredPermissions()) {
+            permissionsPrompt = getString(R.string.ui_permissions_needed_before_login)
+            showPage(Page.PERMISSIONS)
+            refreshUi()
+            return
+        }
+
+        if (loginUrl.isBlank() || username.isBlank() || password.isBlank()) {
             Toast.makeText(this, R.string.toast_missing_form_fields, Toast.LENGTH_LONG).show()
             return
         }
@@ -165,31 +219,40 @@ class MainActivity : AppCompatActivity() {
                 // The app fetches the current FCM token on demand so the backend always stores a fresh callback target.
                 val fcmToken = fetchFcmToken()
                 val currentSettings = settingsStore.load()
+                val backendUrl = binding.etBackendUrl.text?.toString().orEmpty().trim()
+                    .ifBlank { currentSettings.backendBaseUrl }
+                val setupSecret = binding.etSetupSecret.text?.toString().orEmpty().trim()
+                val deviceLabel = binding.etDeviceLabel.text?.toString().orEmpty().trim()
+                    .ifBlank { currentSettings.deviceLabel }
+                settingsStore.saveSetupFields(
+                    backendBaseUrl = BackendApi.normalizeBaseUrl(backendUrl),
+                    loginUrl = loginUrl,
+                    username = username,
+                    setupSecret = setupSecret,
+                    deviceLabel = deviceLabel,
+                )
+                settingsStore.saveFcmToken(fcmToken)
+                refreshUi()
                 val response = backendApi.submitSetup(
                     backendBaseUrl = backendUrl,
                     loginUrl = loginUrl,
                     username = username,
                     password = password,
                     fcmToken = fcmToken,
-                    deviceLabel = deviceLabel.ifBlank { currentSettings.deviceLabel },
+                    deviceLabel = deviceLabel,
                     setupSecret = setupSecret,
                     apiToken = currentSettings.apiToken,
                 )
 
-                settingsStore.saveSetupFields(
-                    backendBaseUrl = BackendApi.normalizeBaseUrl(backendUrl),
-                    loginUrl = loginUrl,
-                    username = username,
-                    setupSecret = setupSecret,
-                    deviceLabel = deviceLabel.ifBlank { currentSettings.deviceLabel },
-                )
-                settingsStore.saveFcmToken(fcmToken)
                 response.apiToken?.let(settingsStore::saveApiToken)
                 settingsStore.saveStatus(response.status)
                 settingsStore.saveLastMessage(response.message)
                 binding.etPassword.setText("")
+                permissionsPrompt = null
+                showLoginFields = false
                 Toast.makeText(this@MainActivity, response.message, Toast.LENGTH_LONG).show()
                 refreshUi()
+                showPage(Page.STATUS)
             } catch (exception: Exception) {
                 settingsStore.saveLastMessage(
                     getString(R.string.toast_setup_failed),
@@ -207,9 +270,31 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun saveAdvancedSettings(showToast: Boolean) {
+        val currentSettings = settingsStore.load()
+        settingsStore.saveSetupFields(
+            backendBaseUrl = BackendApi.normalizeBaseUrl(
+                binding.etBackendUrl.text?.toString().orEmpty().trim().ifBlank { currentSettings.backendBaseUrl },
+            ),
+            loginUrl = binding.etLoginUrl.text?.toString().orEmpty().trim().ifBlank { currentSettings.loginUrl },
+            username = binding.etUsername.text?.toString().orEmpty().trim().ifBlank { currentSettings.username },
+            setupSecret = binding.etSetupSecret.text?.toString().orEmpty().trim(),
+            deviceLabel = binding.etDeviceLabel.text?.toString().orEmpty().trim().ifBlank { currentSettings.deviceLabel },
+        )
+        populateForm(settingsStore.load())
+        refreshUi()
+        if (showToast) {
+            Toast.makeText(this, R.string.toast_settings_saved, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun refreshStatus(showErrors: Boolean) {
         val settings = settingsStore.load()
         if (settings.backendBaseUrl.isBlank() || settings.apiToken.isBlank()) {
+            if (showErrors) {
+                Toast.makeText(this, R.string.toast_status_requires_login, Toast.LENGTH_LONG).show()
+                showPage(Page.LOGIN)
+            }
             refreshUi()
             return
         }
@@ -261,8 +346,59 @@ class MainActivity : AppCompatActivity() {
 
     private fun setBusy(isBusy: Boolean) {
         binding.btnSaveSetup.isEnabled = !isBusy
+        binding.btnSaveSettings.isEnabled = !isBusy
         binding.btnRefreshStatus.isEnabled = !isBusy
         binding.btnRequestPermissions.isEnabled = !isBusy
+        binding.btnCopyToken.isEnabled = !isBusy
+    }
+
+    private fun handleNavigation(item: MenuItem): Boolean {
+        when (item.itemId) {
+            R.id.nav_login -> showPage(Page.LOGIN)
+            R.id.nav_status -> showPage(Page.STATUS)
+            R.id.nav_permissions -> showPage(Page.PERMISSIONS)
+            R.id.nav_settings -> showPage(Page.SETTINGS)
+            R.id.nav_about -> showPage(Page.ABOUT)
+            else -> return false
+        }
+        return true
+    }
+
+    private fun showPage(page: Page, closeDrawer: Boolean = true) {
+        currentPage = page
+        binding.pageLogin.isVisible = page == Page.LOGIN
+        binding.pageStatus.isVisible = page == Page.STATUS
+        binding.pagePermissions.isVisible = page == Page.PERMISSIONS
+        binding.pageSettings.isVisible = page == Page.SETTINGS
+        binding.pageAbout.isVisible = page == Page.ABOUT
+        binding.topAppBar.title = getString(page.titleRes)
+        binding.navView.setCheckedItem(page.menuItemId)
+        if (closeDrawer) {
+            binding.drawerLayout.closeDrawer(GravityCompat.START)
+        }
+    }
+
+    private fun hasRequiredPermissions(): Boolean = requiredPermissions().all(::hasPermission)
+
+    private fun requiredPermissions(): List<String> {
+        val permissions = mutableListOf(
+            Manifest.permission.RECEIVE_SMS,
+            Manifest.permission.READ_SMS,
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        return permissions
+    }
+
+    private fun appVersionName(): String {
+        val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(packageName, 0)
+        }
+        return packageInfo.versionName ?: "-"
     }
 
     private fun mapStatusCode(statusCode: String): String {

@@ -9,6 +9,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLHandshakeException
 
 data class BackendSyncStatus(
     val statusCode: String,
@@ -34,11 +35,7 @@ data class SetupResponse(
 )
 
 class BackendApi(
-    private val httpClient: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .writeTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .build(),
+    private val httpClient: OkHttpClient = defaultHttpClient(),
 ) {
 
     suspend fun submitSetup(
@@ -71,8 +68,8 @@ class BackendApi(
         )
 
         SetupResponse(
-            apiToken = responseJson.optString("api_token").takeIf { it.isNotBlank() },
-            message = responseJson.optString("message"),
+            apiToken = responseJson.optNullableNonBlankString("api_token"),
+            message = responseJson.optString("message").ifBlank { "De gegevens zijn opgeslagen." },
             status = parseStatus(responseJson.optJSONObject("status") ?: JSONObject()),
         )
     }
@@ -151,18 +148,40 @@ class BackendApi(
             requestBuilder.method(method, null)
         }
 
-        httpClient.newCall(requestBuilder.build()).execute().use { response ->
-            val responseBody = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                val message = responseBody.ifBlank { "De backend antwoordde met ${response.code}." }
-                throw IOException(message)
+        try {
+            httpClient.newCall(requestBuilder.build()).execute().use { response ->
+                val responseBody = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    val message = responseBody.ifBlank { "De backend antwoordde met ${response.code}." }
+                    throw IOException(message)
+                }
+                return if (responseBody.isBlank()) JSONObject() else JSONObject(responseBody)
             }
-            return if (responseBody.isBlank()) JSONObject() else JSONObject(responseBody)
+        } catch (exception: SSLHandshakeException) {
+            throw IOException(
+                "HTTPS-validatie mislukt voor de backendverbinding. Controleer het certificaat of probeer een nieuwer Android-apparaat.",
+                exception,
+            )
         }
     }
 
     companion object {
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+
+        private fun defaultHttpClient(): OkHttpClient {
+            return OkHttpClient.Builder()
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .writeTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(15, TimeUnit.SECONDS)
+                .build()
+        }
+
+        private fun JSONObject.optNullableNonBlankString(key: String): String? {
+            if (!has(key) || isNull(key)) {
+                return null
+            }
+            return optString(key).trim().takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
+        }
 
         fun normalizeBaseUrl(baseUrl: String): String {
             val trimmed = baseUrl.trim().removeSuffix("/")
