@@ -20,6 +20,7 @@
     <string name="status_badge_last_login_failed">Laatste login mislukt</string>
     <string name="status_badge_connected">Verbonden</string>
     <string name="status_badge_disconnected">Niet verbonden</string>
+    <string name="status_badge_checking">Controleren…</string>
     <string name="status_badge_paired">Gekoppeld</string>
     <string name="status_badge_not_paired">Niet gekoppeld</string>
     <string name="status_badge_combined">%1$s • %2$s</string>
@@ -32,12 +33,13 @@
     <string name="menu_about">Over</string>
 
     <string name="ui_title">Inloggen op ONS</string>
-    <string name="ui_subtitle">Deze telefoon leest alleen de sms-code. De backend doet de aanmelding en de synchronisatie.</string>
-    <string name="ui_login_helper">Kies eerst het juiste ONS-portaal. Backend-URL, installatiecode en apparaatnaam staan onder Instellingen.</string>
+    <string name="ui_subtitle">Kies je ONS-portaal en meld je aan. Deze app helpt daarna automatisch met verificatiecodes wanneer dat nodig is.</string>
+    <string name="ui_login_helper">Controleer onder Instellingen of je met de juiste backend bent verbonden.</string>
+    <string name="ui_login_helper_missing_configuration">Inloggen lukt pas zodra de backend goed is ingesteld. Controleer onder Instellingen de backend-URL en andere koppelinformatie.</string>
     <string name="ui_login_state_logged_in">Je bent al ingelogd</string>
-    <string name="ui_login_state_logged_in_body">De backend bewaart je inloggegevens al. Een nieuwe login is normaal niet nodig. Laatste succesvolle login: %1$s.</string>
+    <string name="ui_login_state_logged_in_body">Je kunt ONS meestal gewoon blijven gebruiken. Alleen als je gegevens zijn veranderd of opnieuw om bevestiging wordt gevraagd, hoef je opnieuw in te loggen. Laatste succesvolle login: %1$s.</string>
     <string name="ui_login_state_paired">Deze telefoon is al gekoppeld</string>
-    <string name="ui_login_state_paired_body">De backend bewaart je eerdere login al. Opnieuw inloggen is alleen nodig als je gegevens veranderd zijn of als de backend daarom vraagt. Laatste melding: %1$s.</string>
+    <string name="ui_login_state_paired_body">Deze telefoon staat al klaar voor verificatiecodes. Opnieuw inloggen is alleen nodig als je gegevens zijn veranderd of als dat expliciet wordt gevraagd. Laatste melding: %1$s.</string>
     <string name="ui_permissions_title">Toestemmingen</string>
     <string name="ui_permissions_intro">Voor automatische 2FA heeft de app sms- en meldingsrechten nodig. Zonder die rechten kan de backend geen code ophalen.</string>
     <string name="ui_status_title">Backendstatus</string>
@@ -68,7 +70,7 @@
     <string name="ui_backend_url_label">Backend-URL</string>
     <string name="ui_backend_url_help">Laat dit op de standaardwaarde staan tenzij je bewust naar een andere backend wilt testen.</string>
     <string name="ui_portal_label">ONS-portaal</string>
-    <string name="ui_portal_help">De backend beheert de echte login-URL. Jij kiest hier alleen de naam en het logo van het portaal.</string>
+    <string name="ui_portal_help">Staat jouw portaal er niet tussen? Neem contact op met je aanbieder of controleer onder Instellingen of je met de juiste backend bent verbonden.</string>
     <string name="ui_portal_logo_content_description">Logo van het gekozen portaal</string>
     <string name="ui_login_url_label">ONS-inlog-URL</string>
     <string name="ui_username_label">Gebruikersnaam</string>
@@ -93,6 +95,7 @@
     <string name="toast_portal_config_failed">De lijst met ONS-portalen kon niet worden opgehaald.</string>
     <string name="toast_unpair_failed">Het ontkoppelen van dit apparaat is mislukt.</string>
     <string name="toast_unpair_success">Dit apparaat is ontkoppeld.</string>
+    <string name="toast_pairing_invalidated">Deze koppeling is op de backend verwijderd. Log opnieuw in om dit apparaat opnieuw te koppelen.</string>
 
     <string name="ui_saved_configuration_value">Backend: %1$s\nPortaal: %2$s\nGebruikersnaam: %3$s\nApp-token opgeslagen: %4$s</string>
     <string name="ui_backend_status_value">Status: %1$s\nFase: %2$s\nLaatste melding: %3$s\nLaatste fout: %4$s\nLaatste succesvolle login: %5$s\nFCM geconfigureerd op backend: %6$s</string>

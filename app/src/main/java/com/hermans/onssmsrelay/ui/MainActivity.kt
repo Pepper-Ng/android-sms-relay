@@ -64,10 +64,12 @@ class MainActivity : AppCompatActivity() {
     private var portalOptions: List<PortalOption> = emptyList()
     private var selectedPortalId = ""
     private var backendAvailable: Boolean? = null
+    private var loginHelperMessage: String? = null
     private var statusSocket: WebSocket? = null
     private var socketConnected = false
     private var allowSocketReconnect = false
     private var healthCheckJob: Job? = null
+    private var healthCheckBaseUrl = ""
     private var reconnectJob: Job? = null
 
     private val permissionLauncher = registerForActivityResult(
@@ -201,6 +203,9 @@ class MainActivity : AppCompatActivity() {
             showLoginFields = true
         }
 
+        binding.tvLoginHelper.isVisible = !loginHelperMessage.isNullOrBlank()
+        binding.tvLoginHelper.text = loginHelperMessage.orEmpty()
+
         portalOptions = settingsStore.availablePortals(settings)
         if (selectedPortalId.isBlank()) {
             selectedPortalId = settings.selectedPortalId.ifBlank { portalOptions.firstOrNull()?.portalId.orEmpty() }
@@ -213,10 +218,15 @@ class MainActivity : AppCompatActivity() {
         val statusBadgeText = navHeaderView.findViewById<TextView>(R.id.status_badge_text)
         val statusBadgeSubtext = navHeaderView.findViewById<TextView>(R.id.status_badge_subtext)
 
-        val connectionLabel = when {
-            socketConnected -> getString(R.string.status_badge_connected)
-            statusSocket != null -> getString(R.string.ui_realtime_connecting)
-            else -> getString(R.string.status_badge_disconnected)
+        val menuConnectionState = when (backendAvailable) {
+            true -> true
+            false -> false
+            null -> if (settings.paired || hasSavedLogin) null else false
+        }
+        val connectionLabel = when (menuConnectionState) {
+            true -> getString(R.string.status_badge_connected)
+            false -> getString(R.string.status_badge_disconnected)
+            null -> getString(R.string.status_badge_checking)
         }
         val pairedLabel = if (settings.paired || hasSavedLogin) {
             getString(R.string.status_badge_paired)
@@ -225,13 +235,12 @@ class MainActivity : AppCompatActivity() {
         }
         statusBadgeText.text = getString(R.string.status_badge_combined, connectionLabel, pairedLabel)
         statusBadgeSubtext.text = selectedPortal?.name ?: getString(R.string.status_badge_subtext_waiting)
-        val indicatorColor = when {
-            socketConnected -> android.R.color.holo_green_light
-            settings.statusCode == "error" -> android.R.color.holo_red_light
-            settings.paired || hasSavedLogin -> android.R.color.holo_orange_light
-            else -> android.R.color.darker_gray
+        val indicatorColor = when (menuConnectionState) {
+            true -> android.R.color.holo_green_light
+            false -> if (settings.paired || hasSavedLogin) android.R.color.holo_red_light else android.R.color.darker_gray
+            null -> android.R.color.holo_orange_light
         }
-        statusBadgeIndicator.setBackgroundColor(getColor(indicatorColor))
+        statusBadgeIndicator.setBackgroundColor(ContextCompat.getColor(this, indicatorColor))
 
         binding.loginStateCard.isVisible = hasSavedLogin && !showLoginFields
         binding.loginFormContainer.isVisible = !hasSavedLogin || showLoginFields
@@ -300,9 +309,14 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val config = backendApi.fetchMobileConfig(backendUrl)
+                loginHelperMessage = null
                 applyPortalConfig(config)
                 refreshUi()
             } catch (exception: Exception) {
+                if (settings.apiToken.isBlank()) {
+                    loginHelperMessage = getString(R.string.ui_login_helper_missing_configuration)
+                    refreshUi()
+                }
                 if (showErrors) {
                     Toast.makeText(
                         this@MainActivity,
@@ -470,6 +484,10 @@ class MainActivity : AppCompatActivity() {
                 backendAvailable = true
                 refreshUi()
             } catch (exception: Exception) {
+                if (shouldClearPairingAfterFailure(exception.message)) {
+                    invalidatePairingFromBackend()
+                    return@launch
+                }
                 backendAvailable = false
                 refreshUi()
                 if (showErrors) {
@@ -570,19 +588,24 @@ class MainActivity : AppCompatActivity() {
 
     private fun syncStatusRealtimeState(forceReconnect: Boolean = false) {
         val settings = settingsStore.load()
-        val shouldRun = currentPage == Page.STATUS &&
-            settings.backendBaseUrl.isNotBlank() &&
-            settings.apiToken.isNotBlank() &&
+        val canCheckBackend = settings.backendBaseUrl.isNotBlank() &&
             lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
 
-        if (!shouldRun) {
+        if (!canCheckBackend) {
             stopStatusRealtimeState()
             refreshUi()
             return
         }
 
-        allowSocketReconnect = true
         startHealthChecks(settings.backendBaseUrl)
+        val shouldRunSocket = currentPage == Page.STATUS && settings.apiToken.isNotBlank()
+        allowSocketReconnect = shouldRunSocket
+        if (!shouldRunSocket) {
+            stopStatusSocket()
+            refreshUi()
+            return
+        }
+
         if (forceReconnect) {
             stopStatusSocket()
         }
@@ -598,14 +621,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startHealthChecks(backendBaseUrl: String) {
-        if (healthCheckJob != null) {
+        val normalizedBaseUrl = BackendApi.normalizeBaseUrl(backendBaseUrl)
+        if (healthCheckJob != null && healthCheckBaseUrl == normalizedBaseUrl) {
             return
         }
 
+        stopHealthChecks()
+        healthCheckBaseUrl = normalizedBaseUrl
+        backendAvailable = null
+        refreshUi()
+
         healthCheckJob = lifecycleScope.launch {
-            while (isActive && allowSocketReconnect) {
+            while (isActive && healthCheckBaseUrl == normalizedBaseUrl) {
                 backendAvailable = try {
-                    backendApi.checkHealth(backendBaseUrl)
+                    backendApi.checkHealth(normalizedBaseUrl)
                 } catch (_: Exception) {
                     false
                 }
@@ -618,6 +647,7 @@ class MainActivity : AppCompatActivity() {
     private fun stopHealthChecks() {
         healthCheckJob?.cancel()
         healthCheckJob = null
+        healthCheckBaseUrl = ""
     }
 
     private fun startStatusSocket(backendBaseUrl: String, apiToken: String) {
@@ -661,6 +691,10 @@ class MainActivity : AppCompatActivity() {
             onFailure = { message ->
                 runOnUiThread {
                     if (statusSocket !== expectedSocket) {
+                        return@runOnUiThread
+                    }
+                    if (shouldClearPairingAfterFailure(message)) {
+                        invalidatePairingFromBackend()
                         return@runOnUiThread
                     }
                     socketConnected = false
@@ -725,9 +759,24 @@ class MainActivity : AppCompatActivity() {
         refreshUi()
     }
 
+    private fun invalidatePairingFromBackend() {
+        settingsStore.clearPairing()
+        backendAvailable = false
+        showLoginFields = true
+        permissionsPrompt = null
+        stopStatusRealtimeState()
+        refreshUi()
+        showPage(Page.LOGIN)
+        Toast.makeText(this, R.string.toast_pairing_invalidated, Toast.LENGTH_LONG).show()
+    }
+
     private fun shouldClearPairingAfterFailure(message: String?): Boolean {
         val normalized = message.orEmpty().lowercase(Locale.ROOT)
-        return normalized.contains("bestaat niet meer") || normalized.contains("app-token")
+        return normalized.contains("bestaat niet meer") ||
+            normalized.contains("app-token") ||
+            normalized.contains("401") ||
+            normalized.contains("unauthorized") ||
+            normalized.contains("ongeldig")
     }
 
     private suspend fun fetchFcmToken(): String = suspendCancellableCoroutine { continuation ->
@@ -810,15 +859,24 @@ class MainActivity : AppCompatActivity() {
             return "-"
         }
 
-        return try {
-            val parser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX", Locale.US).apply {
-                timeZone = TimeZone.getTimeZone("UTC")
+        val patterns = listOf(
+            "yyyy-MM-dd'T'HH:mm:ss'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+        )
+
+        for (pattern in patterns) {
+            try {
+                val parser = SimpleDateFormat(pattern, Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }
+                val parsed = parser.parse(value) ?: continue
+                return DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, Locale.getDefault()).format(parsed)
+            } catch (_: Exception) {
+                // Try the next timestamp shape before falling back to the raw backend value.
             }
-            val parsed = parser.parse(value) ?: return value
-            DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, Locale.getDefault()).format(parsed)
-        } catch (_: Exception) {
-            value
         }
+
+        return value
     }
 
     private fun mapStatusCode(statusCode: String): String {
